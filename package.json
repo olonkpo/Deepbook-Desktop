@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "description": "DeepBook Studio — AI book writing app, powered by your local Claude Code login (no API key).",
   "main": "main.js",
-  "author": "DeepBook Studio",
+  "author": {
+    "name": "DeepBook Studio",
+    "email": "noreply@deepbook.studio"
+  },
   "private": true,
   "scripts": {
     "start": "electron .",
