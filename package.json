@@ -1,0 +1,59 @@
+{
+  "name": "deepbook-studio",
+  "productName": "DeepBook Studio",
+  "version": "1.0.0",
+  "description": "DeepBook Studio — AI book writing app, powered by your local Claude Code login (no API key).",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.281"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "studio.deepbook.app",
+    "productName": "DeepBook Studio",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "bridge/**/*",
+      "renderer/**/*",
+      "node_modules/**/*",
+      "!node_modules/@anthropic-ai/claude-code-*/**/*.map"
+    ],
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/claude-code/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "DeepBookStudio-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "artifactName": "DeepBookStudio-${version}.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Office",
+      "artifactName": "DeepBookStudio-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    }
+  }
+}
