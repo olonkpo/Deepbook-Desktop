@@ -4,13 +4,14 @@
   "version": "1.0.0",
   "description": "DeepBook Studio — AI book writing app, powered by your local Claude Code login (no API key).",
   "main": "main.js",
+  "author": "DeepBook Studio",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux"
+    "dist": "electron-builder --publish=never",
+    "dist:win": "electron-builder --win --publish=never",
+    "dist:mac": "electron-builder --mac --publish=never",
+    "dist:linux": "electron-builder --linux --publish=never"
   },
   "dependencies": {
     "@anthropic-ai/claude-code": "^2.1.281"
