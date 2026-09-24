@@ -1,11 +1,13 @@
 name: Build installers
 
-# Builds a Windows .exe, a macOS .dmg, and a Linux .AppImage/.deb, each on
-# its own native runner (Claude Code's native binary + Electron packaging
-# both need to be built on/for the target OS — this is why one Linux
-# machine can't produce all three). Artifacts are downloadable from the
-# Actions run summary; the "release" job also attaches them to a GitHub
-# Release when you push a tag like v1.0.0.
+# Builds a Windows .exe, macOS .dmg (both Apple Silicon and Intel), and a
+# Linux .AppImage/.deb, each on its own runner. GitHub's macos-latest runners
+# are Apple Silicon (arm64) only, so the Intel build forces npm to fetch the
+# x64 build of Claude Code's native engine and asks electron-builder to
+# package specifically for x64 — cross-packaging works because Electron just
+# downloads the matching prebuilt binary for whichever arch you ask for.
+# Artifacts are downloadable from the Actions run summary; the "release" job
+# also attaches them to a GitHub Release when you push a tag like v1.0.0.
 
 on:
   push:
@@ -20,10 +22,17 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            arch: x64
             script: dist:win
           - os: macos-latest
+            arch: arm64
             script: dist:mac
+          - os: macos-latest
+            arch: x64
+            script: "dist:mac -- --x64"
+            npm_install_flags: "--cpu=x64 --os=darwin"
           - os: ubuntu-latest
+            arch: x64
             script: dist:linux
     runs-on: ${{ matrix.os }}
     steps:
@@ -34,7 +43,7 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install ${{ matrix.npm_install_flags }}
 
       - name: Build installer
         run: npm run ${{ matrix.script }}
@@ -42,7 +51,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deepbook-studio-${{ matrix.os }}
+          name: deepbook-studio-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             release/*.exe
             release/*.dmg
