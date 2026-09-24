@@ -3954,11 +3954,10 @@ function renderUpdateStatus(status){
 async function checkForAppUpdates(){
   const btn=document.getElementById('setUpdateBtn');
   if(btn)btn.disabled=true;
-  const r=await window.deepbook.checkForUpdates();
-  if(!r.ok)renderUpdateStatus({state:'error',message:r.message});
-  // Otherwise: 'checking-for-update' already fired, and either
-  // 'update-available' (which triggers the download itself) or
-  // 'update-not-available' will follow via the status event listener.
+  await window.deepbook.checkForUpdates();
+  // Status (checking / up-to-date / available / downloading / error) all
+  // arrive via the push event listener — including a final error after the
+  // one automatic retry for GitHub's occasional transient hiccup.
 }
 
 async function signInToClaude(){
