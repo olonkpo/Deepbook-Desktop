@@ -3875,6 +3875,13 @@ async function openSettings(){
         ${window.deepbook?.isElectron?'<button class="btn btn-sm btn-secondary" onclick="signInToClaude()">Sign in to Claude</button>':''}
       </div>
     </div>
+    ${window.deepbook?.isElectron?`<div class="setting-row" id="setBridgeCodeRow" style="display:none">
+      <div class="setting-info"><label>Sign-in Code</label><span>Paste the code shown on the approval page</span></div>
+      <div class="setting-control" style="display:flex;align-items:center;gap:8px">
+        <input id="setBridgeCodeInput" class="field" style="width:160px" placeholder="Paste code…"/>
+        <button class="btn btn-sm btn-secondary" onclick="submitSignInCode()">Confirm</button>
+      </div>
+    </div>`:''}
     <div class="setting-row">
       <div class="setting-info"><label>Target Words/Chapter</label><span>Chapters will be auto-repaired to this length</span></div>
       <div class="setting-control"><input id="setWords" type="number" class="field" style="width:100px" value="${ps.targetWordCount||3000}" min="500" max="8000"/></div>
@@ -3895,16 +3902,96 @@ async function openSettings(){
       <div class="setting-info"><label style="color:var(--red)">Delete Project</label><span>Permanently removes all data</span></div>
       <div class="setting-control"><button class="btn btn-red btn-sm" onclick="deleteProject()">Delete</button></div>
     </div>`:''}
+    ${window.deepbook?.isElectron?`<div class="setting-row">
+      <div class="setting-info"><label>App Updates</label><span id="setUpdateHint">Checking version…</span></div>
+      <div class="setting-control"><button class="btn btn-sm btn-secondary" id="setUpdateBtn" onclick="checkForAppUpdates()">Check for Updates</button></div>
+    </div>`:''}
     <div id="settingsStatus" class="status-msg" style="margin-top:12px"></div>`;
   openModal('settingsModal');
+  if(window.deepbook?.isElectron)initUpdateUI();
+}
+
+let _updateUnsub=null;
+
+async function initUpdateUI(){
+  const hint=document.getElementById('setUpdateHint');
+  if(hint&&window.deepbook?.getAppVersion){
+    const v=await window.deepbook.getAppVersion();
+    hint.textContent='Version '+v+' — click Check for Updates';
+  }
+  if(_updateUnsub)_updateUnsub();
+  _updateUnsub=window.deepbook.onUpdateStatus(renderUpdateStatus);
+}
+
+function renderUpdateStatus(status){
+  const hint=document.getElementById('setUpdateHint');
+  const btn=document.getElementById('setUpdateBtn');
+  if(!hint||!btn)return; // settings modal closed since
+  if(status.state==='checking'){
+    hint.textContent='Checking for updates…';
+    btn.disabled=true;
+  }else if(status.state==='up-to-date'){
+    hint.textContent="You're on the latest version";
+    btn.disabled=false; btn.textContent='Check for Updates';
+  }else if(status.state==='available'){
+    hint.textContent='Update available (v'+status.version+') — downloading…';
+    btn.disabled=true;
+    window.deepbook.downloadUpdate().then(r=>{if(!r.ok)renderUpdateStatus({state:'error',message:r.message})});
+  }else if(status.state==='downloading'){
+    hint.textContent='Downloading update… '+status.percent+'%';
+    btn.disabled=true;
+  }else if(status.state==='downloaded'){
+    hint.textContent='Update v'+status.version+' downloaded';
+    btn.disabled=false;
+    btn.textContent='Restart & Install';
+    btn.onclick=()=>window.deepbook.installUpdate();
+  }else if(status.state==='error'){
+    hint.textContent='Update check failed: '+status.message;
+    btn.disabled=false; btn.textContent='Check for Updates';
+  }
+}
+
+async function checkForAppUpdates(){
+  const btn=document.getElementById('setUpdateBtn');
+  if(btn)btn.disabled=true;
+  const r=await window.deepbook.checkForUpdates();
+  if(!r.ok)renderUpdateStatus({state:'error',message:r.message});
+  // Otherwise: 'checking-for-update' already fired, and either
+  // 'update-available' (which triggers the download itself) or
+  // 'update-not-available' will follow via the status event listener.
 }
 
 async function signInToClaude(){
-  if(!window.deepbook?.signIn)return;
+  if(!window.deepbook?.startSignIn)return;
   const hint=document.getElementById('setBridgeHint');
   if(hint)hint.textContent='Opening your browser to sign in…';
-  const r=await window.deepbook.signIn();
+  const r=await window.deepbook.startSignIn();
+  if(r.needsCode){
+    showSignInCodeBox();
+  }else{
+    if(hint)hint.textContent=r.message;
+    await testBridge();
+  }
+}
+
+function showSignInCodeBox(){
+  const hint=document.getElementById('setBridgeHint');
+  if(hint)hint.textContent='Approve access in the browser tab that opened, then paste the code it shows below.';
+  const row=document.getElementById('setBridgeCodeRow');
+  if(row)row.style.display='flex';
+}
+
+async function submitSignInCode(){
+  const input=document.getElementById('setBridgeCodeInput');
+  const hint=document.getElementById('setBridgeHint');
+  const code=(input?.value||'').trim();
+  if(!code)return;
+  if(hint)hint.textContent='Confirming…';
+  const r=await window.deepbook.submitSignInCode(code);
   if(hint)hint.textContent=r.message;
+  const row=document.getElementById('setBridgeCodeRow');
+  if(row)row.style.display='none';
+  if(input)input.value='';
   await testBridge();
 }
 

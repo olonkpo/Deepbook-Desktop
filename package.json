@@ -17,7 +17,8 @@
     "dist:linux": "electron-builder --linux --publish=never"
   },
   "dependencies": {
-    "@anthropic-ai/claude-code": "^2.1.281"
+    "@anthropic-ai/claude-code": "^2.1.281",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -40,12 +41,17 @@
     "asarUnpack": [
       "node_modules/@anthropic-ai/claude-code/**"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "olonkpo",
+      "repo": "Deepbook-Desktop"
+    },
     "win": {
       "target": "nsis",
       "artifactName": "DeepBookStudio-Setup-${version}.${ext}"
     },
     "mac": {
-      "target": "dmg",
+      "target": ["dmg", "zip"],
       "category": "public.app-category.productivity",
       "artifactName": "DeepBookStudio-${version}.${ext}"
     },

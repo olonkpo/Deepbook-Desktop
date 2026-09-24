@@ -1,19 +1,23 @@
 name: Build installers
 
-# Builds a Windows .exe, macOS .dmg (both Apple Silicon and Intel), and a
-# Linux .AppImage/.deb, each on its own runner. GitHub's macos-latest runners
-# are Apple Silicon (arm64) only, so the Intel build forces npm to fetch the
-# x64 build of Claude Code's native engine and asks electron-builder to
-# package specifically for x64 — cross-packaging works because Electron just
-# downloads the matching prebuilt binary for whichever arch you ask for.
-# Artifacts are downloadable from the Actions run summary; the "release" job
-# also attaches them to a GitHub Release when you push a tag like v1.0.0.
+# Builds a Windows .exe, macOS .dmg (Apple Silicon + Intel), and a Linux
+# .AppImage/.deb, each on its own runner.
+#
+# - Push to main:      builds only, artifacts attached to the run (for
+#                       manual download/testing) — nothing published.
+# - Push a tag "vX.Y.Z": builds AND publishes a GitHub Release with the
+#                       installers plus the latest*.yml manifests that the
+#                       in-app "Check for Updates" button reads. Bump
+#                       "version" in package.json to match the tag first.
 
 on:
   push:
     branches: [main]
     tags: ['v*']
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,17 +27,17 @@ jobs:
         include:
           - os: windows-latest
             arch: x64
-            script: dist:win
+            flags: "--win"
           - os: macos-latest
             arch: arm64
-            script: dist:mac
+            flags: "--mac"
           - os: macos-latest
             arch: x64
-            script: "dist:mac -- --x64"
+            flags: "--mac --x64"
             npm_install_flags: "--cpu=x64 --os=darwin"
           - os: ubuntu-latest
             arch: x64
-            script: dist:linux
+            flags: "--linux"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,8 +49,20 @@ jobs:
       - name: Install dependencies
         run: npm install ${{ matrix.npm_install_flags }}
 
+      - name: Determine publish mode
+        id: publish
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "mode=always" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=never" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build installer
-        run: npm run ${{ matrix.script }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder ${{ matrix.flags }} --publish=${{ steps.publish.outputs.mode }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -55,21 +71,7 @@ jobs:
           path: |
             release/*.exe
             release/*.dmg
+            release/*.zip
             release/*.AppImage
             release/*.deb
           if-no-files-found: warn
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*
