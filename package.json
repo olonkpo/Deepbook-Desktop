@@ -27,6 +27,8 @@
   "build": {
     "appId": "studio.deepbook.app",
     "productName": "DeepBook Studio",
+    "compression": "maximum",
+    "afterPack": "afterPack.js",
     "directories": {
       "output": "release"
     },
