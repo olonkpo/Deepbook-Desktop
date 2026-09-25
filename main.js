@@ -160,9 +160,10 @@ let signinChild = null;
 
 ipcMain.handle('deepbook:signin-start', async () => {
   let bin;
-  try { bin = resolveClaudeBinary(); } catch (e) { return { ok: false, message: 'Could not locate the bundled Claude binary: ' + e.message }; }
+  try { bin = resolveClaudeBinary(); } catch (e) { log.error('[signin] could not resolve binary:', e.message); return { ok: false, message: 'Could not locate the bundled Claude binary: ' + e.message }; }
 
-  if (signinChild) { try { signinChild.kill(); } catch {} signinChild = null; }
+  log.info('[signin] starting: spawning', bin, 'auth login');
+  if (signinChild) { log.info('[signin] killing previous in-flight signinChild'); try { signinChild.kill(); } catch {} signinChild = null; }
 
   try {
     return await new Promise((resolve) => {
@@ -173,21 +174,25 @@ ipcMain.handle('deepbook:signin-start', async () => {
 
     const child = spawn(bin, ['auth', 'login'], { stdio: ['pipe', 'pipe', 'pipe'] });
     signinChild = child;
+    log.info('[signin] spawned pid', child.pid);
 
     const finishOnce = (result) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      log.info('[signin] resolving:', JSON.stringify(result));
       resolve(result);
     };
 
     const onData = (buf) => {
       const text = buf.toString();
       buffered += text;
+      log.info('[signin] output chunk:', JSON.stringify(text));
 
       const urlMatch = buffered.match(urlPattern);
       if (urlMatch && !opened) {
         opened = true;
+        log.info('[signin] detected URL, opening:', urlMatch[0]);
         shell.openExternal(urlMatch[0]);
       }
 
@@ -201,9 +206,10 @@ ipcMain.handle('deepbook:signin-start', async () => {
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
 
-    child.on('error', (e) => { signinChild = null; finishOnce({ ok: false, message: 'Could not start claude auth login: ' + e.message }); });
+    child.on('error', (e) => { signinChild = null; log.error('[signin] spawn error:', e.message); finishOnce({ ok: false, message: 'Could not start claude auth login: ' + e.message }); });
     child.on('close', (code) => {
       signinChild = null;
+      log.info('[signin] process closed with code', code);
       // If it exited before ever asking for a code, report whatever we saw.
       finishOnce({
         ok: code === 0,
@@ -213,6 +219,7 @@ ipcMain.handle('deepbook:signin-start', async () => {
     });
 
     const timer = setTimeout(() => {
+      log.warn('[signin] 20s timeout reached. opened =', opened, 'buffered so far:', JSON.stringify(buffered));
       finishOnce({
         ok: opened,
         needsCode: false,
@@ -223,27 +230,30 @@ ipcMain.handle('deepbook:signin-start', async () => {
     }, 20000);
     });
   } catch (e) {
+    log.error('[signin] unexpected error:', e?.message || e);
     return { ok: false, message: 'Unexpected error starting sign-in: ' + (e?.message || String(e)) };
   }
 });
 
 ipcMain.handle('deepbook:signin-submit-code', async (_event, code) => {
-  if (!signinChild) return { ok: false, message: 'No sign-in in progress — click Sign in to Claude again.' };
+  if (!signinChild) { log.warn('[signin] submit-code called with no signinChild in flight'); return { ok: false, message: 'No sign-in in progress — click Sign in to Claude again.' }; }
+  log.info('[signin] submitting code to pid', signinChild.pid);
 
   return new Promise((resolve) => {
     let settled = false;
     let buffered = '';
-    const finishOnce = (result) => { if (settled) return; settled = true; clearTimeout(timer); resolve(result); };
+    const finishOnce = (result) => { if (settled) return; settled = true; clearTimeout(timer); log.info('[signin] submit-code resolving:', JSON.stringify(result)); resolve(result); };
 
-    const onData = (buf) => { buffered += buf.toString(); };
+    const onData = (buf) => { buffered += buf.toString(); log.info('[signin] (post-code) output chunk:', JSON.stringify(buf.toString())); };
     signinChild.stdout.on('data', onData);
     signinChild.stderr.on('data', onData);
 
     signinChild.on('close', (exitCode) => {
       signinChild = null;
+      log.info('[signin] (post-code) process closed with code', exitCode);
       finishOnce({ ok: exitCode === 0, message: exitCode === 0 ? 'Signed in.' : (buffered.trim() || `Exited with code ${exitCode}`) });
     });
-    signinChild.on('error', (e) => { signinChild = null; finishOnce({ ok: false, message: e.message }); });
+    signinChild.on('error', (e) => { signinChild = null; log.error('[signin] (post-code) error:', e.message); finishOnce({ ok: false, message: e.message }); });
 
     signinChild.stdin.write(String(code).trim() + '\n');
 
