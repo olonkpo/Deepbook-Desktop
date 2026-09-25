@@ -3964,12 +3964,16 @@ async function signInToClaude(){
   if(!window.deepbook?.startSignIn)return;
   const hint=document.getElementById('setBridgeHint');
   if(hint)hint.textContent='Opening your browser to sign in…';
-  const r=await window.deepbook.startSignIn();
-  if(r.needsCode){
-    showSignInCodeBox();
-  }else{
-    if(hint)hint.textContent=r.message;
-    await testBridge();
+  try{
+    const r=await window.deepbook.startSignIn();
+    if(r.needsCode){
+      showSignInCodeBox();
+    }else{
+      if(hint)hint.textContent=r.message;
+      await testBridge();
+    }
+  }catch(e){
+    if(hint)hint.textContent='Sign-in failed: '+(e?.message||e);
   }
 }
 

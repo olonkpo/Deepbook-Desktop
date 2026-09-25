@@ -100,11 +100,12 @@ let signinChild = null;
 
 ipcMain.handle('deepbook:signin-start', async () => {
   let bin;
-  try { bin = resolveClaudeBinary(); } catch (e) { return { ok: false, message: e.message }; }
+  try { bin = resolveClaudeBinary(); } catch (e) { return { ok: false, message: 'Could not locate the bundled Claude binary: ' + e.message }; }
 
   if (signinChild) { try { signinChild.kill(); } catch {} signinChild = null; }
 
-  return new Promise((resolve) => {
+  try {
+    return await new Promise((resolve, reject) => {
     let settled = false;
     let opened = false;
     let buffered = '';
@@ -140,21 +141,30 @@ ipcMain.handle('deepbook:signin-start', async () => {
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
 
-    child.on('error', (e) => { signinChild = null; finishOnce({ ok: false, message: e.message }); });
+    child.on('error', (e) => { signinChild = null; finishOnce({ ok: false, message: 'Could not start claude auth login: ' + e.message }); });
     child.on('close', (code) => {
       signinChild = null;
       // If it exited before ever asking for a code, report whatever we saw.
       finishOnce({
         ok: code === 0,
         needsCode: false,
-        message: code === 0 ? 'Signed in.' : (buffered.trim() || `claude auth login exited with code ${code}`),
+        message: code === 0 ? 'Signed in.' : (buffered.trim() ? `claude auth login exited (code ${code}): ${buffered.trim().slice(-500)}` : `claude auth login exited with code ${code} and no output`),
       });
     });
 
     const timer = setTimeout(() => {
-      finishOnce({ ok: opened, needsCode: false, message: opened ? 'Still waiting — finish signing in in your browser.' : 'Could not detect a sign-in link. Check your default browser or try again.' });
+      finishOnce({
+        ok: opened,
+        needsCode: false,
+        message: opened
+          ? 'Still waiting — finish signing in in your browser.'
+          : `No sign-in link detected after 20s. CLI output so far: ${buffered.trim() ? buffered.trim().slice(-500) : '(nothing printed at all)'}`,
+      });
     }, 20000);
-  });
+    });
+  } catch (e) {
+    return { ok: false, message: 'Unexpected error starting sign-in: ' + (e?.message || String(e)) };
+  }
 });
 
 ipcMain.handle('deepbook:signin-submit-code', async (_event, code) => {
