@@ -3,12 +3,20 @@ name: Build installers
 # Builds a Windows .exe, macOS .dmg (Apple Silicon + Intel), and a Linux
 # .AppImage/.deb, each on its own runner.
 #
-# - Push to main:      builds only, artifacts attached to the run (for
-#                       manual download/testing) — nothing published.
-# - Push a tag "vX.Y.Z": builds AND publishes a GitHub Release with the
-#                       installers plus the latest*.yml manifests that the
-#                       in-app "Check for Updates" button reads. Bump
-#                       "version" in package.json to match the tag first.
+# - Push to main:      lints, builds, and smoke-tests (Linux) — artifacts
+#                       attached to the run for manual download/testing.
+#                       Nothing published. This is the safe way to check a
+#                       change before it reaches anyone's installed app.
+# - Push a tag "vX.Y.Z": same as above, AND (if it all passes) publishes a
+#                       GitHub Release with the installers plus the
+#                       latest*.yml manifests the in-app "Check for
+#                       Updates" button reads. Bump "version" in
+#                       package.json to match the tag first.
+#                       Tag a prerelease first (e.g. v1.2.0-beta.1) to try
+#                       a real build without pushing it to existing
+#                       installs — electron-updater ignores prereleases by
+#                       default, so only re-tagging the final vX.Y.Z number
+#                       actually reaches users. See README.md.
 
 on:
   push:
@@ -20,7 +28,18 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run lint
+
   build:
+    needs: lint
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +82,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder ${{ matrix.flags }} --publish=${{ steps.publish.outputs.mode }}
+
+      # Cheap sanity check: does the packaged app even survive launching?
+      # Only Linux, since it's the one runner where a headless display
+      # (xvfb) is trivial to set up. Doesn't exercise every feature — just
+      # catches "this build is completely broken" before anyone downloads
+      # or auto-updates to it.
+      - name: Smoke test (launch check)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+          APPIMAGE=$(ls release/*.AppImage)
+          chmod +x "$APPIMAGE"
+          # --appimage-extract-and-run avoids needing FUSE, which GitHub's
+          # ubuntu-latest runners don't have installed by default — without
+          # this flag every run fails on "libfuse.so.2 not found" regardless
+          # of whether the app itself is fine.
+          xvfb-run --auto-servernum "$APPIMAGE" --appimage-extract-and-run --no-sandbox &
+          APP_PID=$!
+          sleep 10
+          if ! kill -0 $APP_PID 2>/dev/null; then
+            echo "::error::App exited within 10s of launch — likely crashed on startup"
+            exit 1
+          fi
+          echo "App still running after 10s — looks healthy"
+          kill $APP_PID
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

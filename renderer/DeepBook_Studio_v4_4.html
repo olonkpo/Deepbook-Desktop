@@ -726,7 +726,7 @@ async function callAI(prompt, settings, system=BOOK_WRITER_SYSTEM_PROMPT){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({prompt,system})});
   }catch(e){
-    throw new Error('Can\'t reach the local Claude bridge at '+BRIDGE_URL+'. Is it running? (cd deepbook-bridge && npm start)');
+    throw new Error('Can\'t reach the local Claude bridge at '+BRIDGE_URL+'. Is it running? (cd deepbook-bridge && npm start)',{cause:e});
   }
   const d=await r.json();
   if(!r.ok)throw new Error(d.error||'Bridge error '+r.status);
@@ -3905,6 +3905,13 @@ async function openSettings(){
     ${window.deepbook?.isElectron?`<div class="setting-row">
       <div class="setting-info"><label>App Updates</label><span id="setUpdateHint">Checking version…</span></div>
       <div class="setting-control"><button class="btn btn-sm btn-secondary" id="setUpdateBtn" onclick="checkForAppUpdates()">Check for Updates</button></div>
+    </div>`:''}
+    ${window.deepbook?.isElectron?`<div class="setting-row">
+      <div class="setting-info"><label>Diagnostics</label><span>Logs help track down bugs — nothing is sent unless you click Report</span></div>
+      <div class="setting-control" style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary" onclick="window.deepbook.openLogsFolder()">Open Logs Folder</button>
+        <button class="btn btn-sm btn-secondary" onclick="window.deepbook.reportIssue()">Report an Issue</button>
+      </div>
     </div>`:''}
     <div id="settingsStatus" class="status-msg" style="margin-top:12px"></div>`;
   openModal('settingsModal');

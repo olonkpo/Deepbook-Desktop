@@ -1,8 +1,68 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 const { startBridge, resolveClaudeBinary } = require('./bridge/server-lib');
+
+// Captures console.log/warn/error from main AND renderer into a real log
+// file on disk, and gives us a stack trace for crashes we'd otherwise never
+// see (packaged apps have no visible terminal).
+log.initialize();
+autoUpdater.logger = log;
+process.on('uncaughtException', (err) => log.error('uncaughtException:', err));
+process.on('unhandledRejection', (reason) => log.error('unhandledRejection:', reason));
+
+function getLogFilePath() {
+  try { return log.transports.file.getFile().path; } catch { return null; }
+}
+
+ipcMain.handle('deepbook:open-logs-folder', () => {
+  const file = getLogFilePath();
+  if (file) shell.showItemInFolder(file);
+  return { ok: !!file };
+});
+
+ipcMain.handle('deepbook:get-recent-logs', (_event, maxLines = 200) => {
+  const file = getLogFilePath();
+  if (!file) return '';
+  try {
+    return fs.readFileSync(file, 'utf8').split('\n').slice(-maxLines).join('\n');
+  } catch {
+    return '';
+  }
+});
+
+ipcMain.handle('deepbook:report-issue', () => {
+  try {
+    const version = app.getVersion();
+    const platform = `${process.platform}-${process.arch}`;
+    const file = getLogFilePath();
+    let logs = '';
+    try { logs = fs.readFileSync(file, 'utf8').split('\n').slice(-60).join('\n').slice(-3000); } catch {}
+    const body = [
+      `**App version:** ${version}`,
+      `**Platform:** ${platform}`,
+      '',
+      '**What happened:**',
+      '<!-- describe the problem here -->',
+      '',
+      '<details><summary>Recent logs</summary>',
+      '',
+      '```',
+      logs || '(no logs captured yet)',
+      '```',
+      '</details>',
+    ].join('\n');
+    const url = 'https://github.com/olonkpo/Deepbook-Desktop/issues/new?' +
+      new URLSearchParams({ title: `Issue in v${version}`, body }).toString();
+    shell.openExternal(url);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+});
 
 let win;
 let bridgeServer;
@@ -105,7 +165,7 @@ ipcMain.handle('deepbook:signin-start', async () => {
   if (signinChild) { try { signinChild.kill(); } catch {} signinChild = null; }
 
   try {
-    return await new Promise((resolve, reject) => {
+    return await new Promise((resolve) => {
     let settled = false;
     let opened = false;
     let buffered = '';
