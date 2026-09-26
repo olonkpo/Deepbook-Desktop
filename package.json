@@ -1,7 +1,7 @@
 {
   "name": "deepbook-studio",
   "productName": "DeepBook Studio",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "DeepBook Studio — AI book writing app, powered by your local Claude Code login (no API key).",
   "main": "main.js",
   "author": {
