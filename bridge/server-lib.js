@@ -29,7 +29,17 @@ const DISALLOWED_TOOLS = [
 function resolveClaudeBinary() {
   const pkgJsonPath = require.resolve('@anthropic-ai/claude-code/package.json');
   const pkgDir = path.dirname(pkgJsonPath);
-  const bin = path.join(pkgDir, 'bin', 'claude.exe');
+  let bin = path.join(pkgDir, 'bin', 'claude.exe');
+  // require.resolve() always returns the virtual in-archive path
+  // (".../app.asar/..."), which Electron's patched fs/require layer reads
+  // from transparently — but child_process.spawn() calls the real OS exec
+  // syscall directly, bypassing that layer entirely, and "app.asar" isn't a
+  // real directory the OS can see into. asarUnpack (see package.json) does
+  // put a real, directly-executable copy on disk at the parallel
+  // "app.asar.unpacked" path — we just have to point at it explicitly.
+  if (bin.includes(`${path.sep}app.asar${path.sep}`)) {
+    bin = bin.replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
+  }
   log.info('[bridge] resolved claude binary at', bin);
   return bin;
 }
