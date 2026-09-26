@@ -68,6 +68,34 @@ jobs:
       - name: Install dependencies
         run: npm install ${{ matrix.npm_install_flags }}
 
+      - name: Fix cross-arch native binary placement (Intel Mac only)
+        if: matrix.os == 'macos-latest' && matrix.arch == 'x64'
+        run: |
+          # This runner is actually arm64 (Apple Silicon); running the x64
+          # binary we're about to verify needs Rosetta 2, which isn't
+          # guaranteed pre-installed on GitHub's arm64 runners.
+          softwareupdate --install-rosetta --agree-to-license || true
+          # Claude Code's own postinstall script decides which native binary
+          # to place by checking the REAL machine's arch (this runner is
+          # actually arm64), not npm's --cpu=x64 override above — so on this
+          # one cross-arch job it looks for the arm64 build, finds nothing
+          # (we told npm to skip it), and leaves the x64 binary we DID
+          # install sitting unused in node_modules instead of placed at
+          # bin/claude.exe. Place it ourselves.
+          SRC=node_modules/@anthropic-ai/claude-code-darwin-x64/claude
+          DEST=node_modules/@anthropic-ai/claude-code/bin/claude.exe
+          if [ ! -f "$SRC" ]; then
+            echo "::error::Expected native binary not found at $SRC — did npm install actually fetch @anthropic-ai/claude-code-darwin-x64?"
+            exit 1
+          fi
+          cp "$SRC" "$DEST"
+          chmod +x "$DEST"
+          echo "Placed $(du -h "$DEST" | cut -f1) binary at $DEST"
+          # Verify it actually runs before we bother packaging it — catches
+          # a wrong-arch or corrupted binary right here instead of only
+          # after someone installs the app.
+          "$DEST" --version
+
       - name: Determine publish mode
         id: publish
         shell: bash
