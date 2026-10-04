@@ -19,6 +19,5 @@ contextBridge.exposeInMainWorld('deepbook', {
     return () => ipcRenderer.removeListener('deepbook:update-status', handler);
   },
   openLogsFolder: () => ipcRenderer.invoke('deepbook:open-logs-folder'),
-  getRecentLogs: (maxLines) => ipcRenderer.invoke('deepbook:get-recent-logs', maxLines),
   reportIssue: () => ipcRenderer.invoke('deepbook:report-issue'),
 });

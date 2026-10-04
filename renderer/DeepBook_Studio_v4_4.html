@@ -3872,7 +3872,7 @@ async function openSettings(){
       <div class="setting-control" style="display:flex;align-items:center;gap:8px">
         <span id="setBridgeDot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${_bridgeOK?'var(--green,#3a9d5d)':'var(--red,#c0463a)'}"></span>
         <button class="btn btn-sm btn-secondary" onclick="testBridge()">Test Connection</button>
-        ${window.deepbook?.isElectron?'<button class="btn btn-sm btn-secondary" onclick="signInToClaude()">Sign in to Claude</button>':''}
+        ${window.deepbook?.isElectron?'<button class="btn btn-sm btn-secondary" id="setSignInBtn" onclick="signInToClaude()">Sign in to Claude</button>':''}
       </div>
     </div>
     ${window.deepbook?.isElectron?`<div class="setting-row" id="setBridgeCodeRow" style="display:none">
@@ -3970,17 +3970,27 @@ async function checkForAppUpdates(){
 async function signInToClaude(){
   if(!window.deepbook?.startSignIn)return;
   const hint=document.getElementById('setBridgeHint');
+  const btn=document.getElementById('setSignInBtn');
+  // Disabled synchronously (not just once an event arrives) so a rapid
+  // double-click can't start two concurrent `claude auth login` processes —
+  // the second would silently orphan the first and the two would race for
+  // control of the shared signinChild reference.
+  if(btn)btn.disabled=true;
   if(hint)hint.textContent='Opening your browser to sign in…';
   try{
     const r=await window.deepbook.startSignIn();
     if(r.needsCode){
       showSignInCodeBox();
+      // left disabled — submitSignInCode() re-enables once the flow
+      // actually finishes (success or failure)
     }else{
       if(hint)hint.textContent=r.message;
+      if(btn)btn.disabled=false;
       await testBridge();
     }
   }catch(e){
     if(hint)hint.textContent='Sign-in failed: '+(e?.message||e);
+    if(btn)btn.disabled=false;
   }
 }
 
@@ -3994,14 +4004,21 @@ function showSignInCodeBox(){
 async function submitSignInCode(){
   const input=document.getElementById('setBridgeCodeInput');
   const hint=document.getElementById('setBridgeHint');
+  const btn=document.getElementById('setSignInBtn');
   const code=(input?.value||'').trim();
   if(!code)return;
   if(hint)hint.textContent='Confirming…';
-  const r=await window.deepbook.submitSignInCode(code);
-  if(hint)hint.textContent=r.message;
-  const row=document.getElementById('setBridgeCodeRow');
-  if(row)row.style.display='none';
-  if(input)input.value='';
+  try{
+    const r=await window.deepbook.submitSignInCode(code);
+    if(hint)hint.textContent=r.message;
+  }finally{
+    // Always re-enable, win or lose — this is the real end of the sign-in
+    // flow that signInToClaude() deliberately left the button disabled for.
+    if(btn)btn.disabled=false;
+    const row=document.getElementById('setBridgeCodeRow');
+    if(row)row.style.display='none';
+    if(input)input.value='';
+  }
   await testBridge();
 }
 

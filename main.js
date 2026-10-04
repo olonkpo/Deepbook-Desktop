@@ -24,16 +24,6 @@ ipcMain.handle('deepbook:open-logs-folder', () => {
   return { ok: !!file };
 });
 
-ipcMain.handle('deepbook:get-recent-logs', (_event, maxLines = 200) => {
-  const file = getLogFilePath();
-  if (!file) return '';
-  try {
-    return fs.readFileSync(file, 'utf8').split('\n').slice(-maxLines).join('\n');
-  } catch {
-    return '';
-  }
-});
-
 ipcMain.handle('deepbook:report-issue', () => {
   try {
     const version = app.getVersion();
@@ -278,4 +268,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   if (bridgeServer) bridgeServer.close();
   if (process.platform !== 'darwin') app.quit();
+});
+
+// Don't leave a `claude auth login` process running in the background if
+// the app quits mid-sign-in.
+app.on('before-quit', () => {
+  if (signinChild) { try { signinChild.kill(); } catch {} }
 });
