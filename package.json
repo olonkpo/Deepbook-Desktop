@@ -35,6 +35,7 @@
     "productName": "DeepBook Studio",
     "compression": "maximum",
     "afterPack": "afterPack.js",
+    "icon": "build/icon.png",
     "directories": {
       "output": "release"
     },
@@ -43,6 +44,7 @@
       "preload.js",
       "bridge/**/*",
       "renderer/**/*",
+      "build/icon.png",
       "node_modules/**/*",
       "!node_modules/@anthropic-ai/claude-code-*/**/*.map"
     ],

@@ -120,6 +120,7 @@ function createWindow() {
     width: 1440,
     height: 940,
     title: 'DeepBook Studio',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
